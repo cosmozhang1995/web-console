@@ -1,0 +1,21 @@
+{
+  "name": "web-console",
+  "description": "",
+  "main": "index.js",
+  "authors": [
+    "Cosmo Zhang <cosmozhang1995@gmail.com>"
+  ],
+  "license": "MIT",
+  "homepage": "",
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "public/vender",
+    "test",
+    "tests"
+  ],
+  "dependencies": {
+    "jquery": "^3.2.1",
+    "bootstrap": "^3.3.7"
+  }
+}

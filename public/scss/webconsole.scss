@@ -1,0 +1,66 @@
+@import './animation';
+
+@mixin consolebox() {
+  box-sizing: border-box;
+  overflow-y: scroll;
+  overflow-x: hidden;
+
+  &:focus {
+    outline: none;
+  }
+
+  .content {
+    overflow: hidden;
+    display: block;
+    height: auto;
+  }
+
+  .cursor-wrapper {
+    width: 0;
+    height: $font_size;
+    display: inline-block;
+  }
+  .cursor {
+    background-color: transparent;
+    border-width: 1px;
+    border-style: solid;
+    border-color: transparent;
+    height: $font_size;
+    width: $font_size / 2;
+    display: inline-block;
+    content: " ";
+  }
+  &:focus.cursor-on .cursor {
+    background-color: $cursor_color;
+    border-color: $cursor_color;
+  }
+  &:focus.cursor-off .cursor {
+    background-color: transparent;
+    border-color: $cursor_color;
+  }
+
+  .fake-input {
+    width: 0;
+    height: 0;
+    border: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .content-row {
+    z-index: 10;
+    min-height: $font_size * 1.5;
+  }
+
+  @include keyframes(blink_text_anim) {
+    0% { opacity: 1; }
+    100% { opacity: 0; }
+  }
+  .blink-text {
+    @include animation-name(blink_text_anim);
+    @include animation-delay(0.5s);
+    @include animation-iteration-count(infinite);
+    @include animation-direction(alternate);
+  }
+
+}
