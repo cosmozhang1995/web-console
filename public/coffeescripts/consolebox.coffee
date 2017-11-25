@@ -159,7 +159,9 @@ ConsoleBox = (selector, config) ->
   config.bgcolor = config.bgcolor || "#001"
   config.colorscheme = config.colorscheme || ["#000","#f00","#0f0","#ff0","#00f","#f0f","#0ff","#fff"]
   config.initcmds = config.initcmds || ["source ~/.bash_profile"]
-  config.blinkinterval = 500
+  config.blink_interval = 500
+  config.keyhold_delay = config.keyhold_delay || 1000
+  config.keyhold_interval = config.keyhold_interval || 250
 
   el = $(selector) # the root element
   ws = undefined # the websocket
@@ -270,17 +272,13 @@ ConsoleBox = (selector, config) ->
   blinktimer = setInterval ->
     blinkstate = not blinkstate
     updateBlinkState()
-  , config.blinkinterval
+  , config.blink_interval
 
   # the text and cursor in current row
   currtext = new StyledText()
   currcpos = 0
   currcprp = new TextProp()
   currcmod = [false, false, false, false, false] # Input mode (SM/RM)
-
-  # # cursor blinking
-  # cursorTimer = -1
-  # cursorState = false
 
   # window size in text width
   window_width = 1000
@@ -325,7 +323,7 @@ ConsoleBox = (selector, config) ->
         proparr.push
           index: i
           prop: p
-    console.log("[text2html]", text, proparr)
+      cp = p
     retspan = $('<span></span>')
     for i in [0...proparr.length]
       p = proparr[i]
@@ -338,7 +336,7 @@ ConsoleBox = (selector, config) ->
       t = t.replace(/\n/g, "<br/>")
       span = $('<span></span>').html(t)
       fgcolor = if p.fgcolor == undefined then config.fgcolor else parse_fgcolor(p.fgcolor)
-      bgcolor = if p.bgcolor == undefined then config.bgcolor else parse_fgcolor(p.bgcolor)
+      bgcolor = if p.bgcolor == undefined then config.bgcolor else parse_bgcolor(p.bgcolor)
       if p.ctrl.clear
         fgcolor = config.fgcolor
         bgcolor = config.bgcolor
@@ -366,22 +364,6 @@ ConsoleBox = (selector, config) ->
       retspan.append(span)
     return retspan
 
-  # cursorBlinkBegin = ->
-  #   clearInterval(cursorTimer)
-  #   cursorTimer = -1
-  #   cursorTimer = setInterval ->
-  #     updateCursorState()
-  #   , 500
-  # cursorBlinkReset = ->
-  #   clearInterval(cursorTimer)
-  #   cursorTimer = -1
-  #   updateCursorState(true)
-  # cursorBlinkEnd = ->
-  #   clearInterval cursorTimer
-  #   cursorTimer = -1
-  #   updateCursorState(false)
-  # cursorBlinkBegin()
-
   scrollToBottom = ->
     el.scrollTop(contentEl.height())
 
@@ -390,16 +372,6 @@ ConsoleBox = (selector, config) ->
       return config.colorscheme[code - 30]
     else if code >= 40 and code <= 47
       return config.colorscheme[code - 40]
-
-  # updateCursorState = (state) ->
-  #   if typeof state != "boolean" then state = !cursorState
-  #   cursorState = state
-  #   if cursorState
-  #     el.addClass('cursor-on')
-  #     el.removeClass('cursor-off')
-  #   else
-  #     el.removeClass('cursor-on')
-  #     el.addClass('cursor-off')
 
   updateText = (text, cpos, cprp) ->
     # cursorBlinkReset()
@@ -417,31 +389,7 @@ ConsoleBox = (selector, config) ->
     currrow.append(cursorEl.detach())
     if (text2.length > 0)
       currrow.append(text2html(text2))
-    # cursorBlinkBegin()
     scrollToBottom()
-
-  # insertChar = (ch) ->
-  #   newtext = undefined
-  #   cpos = currcpos
-  #   if cpos == undefined
-  #     newtext = currtext + ch
-  #   else
-  #     newtext = currtext.slice(0,cpos) + ch + currtext.slice(cpos)
-  #     cpos += ch.length
-  #   updateText(newtext, cpos)
-
-  # removeChar = (len) ->
-  #   if len == undefined then len = 1
-  #   if len < 0 then return
-  #   newtext = undefined
-  #   cpos = currcpos
-  #   if cpos == undefined
-  #     newtext = currtext.slice(0, currtext.length - len)
-  #   else
-  #     newtext = currtext.slice(0, cpos - len) + currtext.slice(cpos)
-  #     cpos -= len
-  #     if cpos < 0 then cpos = 0
-  #   updateText(newtext, cpos)
 
   moveCursor = (amount) ->
     cpos = currcpos
@@ -459,14 +407,17 @@ ConsoleBox = (selector, config) ->
   # Bind focus/blur events
   el.attr('tabindex', -1)
   el.on 'focus', ->
-    # fakeinput.focus()
     updateBlinkState()
     return
   el.on 'blur', ->
     updateBlinkState()
     return
 
-  el.on 'keyup', (event)->
+  keyholdtimer = -1
+
+  el.on 'keydown', (event)->
+    clearTimeout keyholdtimer
+    keyholdtimer = -1
     if not initialized then return
     keycode = event.keyCode
     ch = String.fromCharCode(keycode)
@@ -479,41 +430,46 @@ ConsoleBox = (selector, config) ->
     visible = visible || (keycode >= 186 and keycode <= 192) # punctuations
     visible = visible || (keycode >= 219 and keycode <= 222) # punctuations
     visible = visible || (keycode == 32) # space bar
-    # if !event.ctrlKey and !event.metaKey and !event.shiftKey
+    sendmsg = undefined
     if !event.ctrlKey and !event.metaKey and visible and keych
       # Visible chars
-      #### insertChar(keych)
-      ws.send(keych)
+      sendmsg = keych
     else if event.ctrlKey and keycode >= 65 and keycode <= 90
       # Control
-      ws.send(String.fromCharCode(keycode-64))
+      sendmsg = String.fromCharCode(keycode-64)
     else if keycode == 8
       # Delete
-      #### removeChar()
-      #### ws.send('\\x' + 127)
-      ws.send('\x08')
+      sendmsg = '\x08'
     else if keycode == 108 or keycode == 13
       # Enter
-      #### appendRow(currtext)
-      #### updateText("")
-      ws.send('\r')
+      sendmsg = '\r'
     else if keycode == 37
       # Left key
-      #### moveCursor(-1)
-      ws.send('\x1B[D')
+      sendmsg = '\x1B[D'
     else if keycode == 39
       # Right key
-      #### moveCursor(1)
-      ws.send('\x1B[C')
+      sendmsg = '\x1B[C'
     else if keycode == 38
       # Up key
-      ws.send('\x1B[A')
+      sendmsg = '\x1B[A'
     else if keycode == 40
       # Down key
-      ws.send('\x1B[B')
+      sendmsg = '\x1B[B'
     else if keycode == 0x09
       # Tab
-      ws.send('\t')
+      sendmsg = '\t'
+    unless sendmsg is undefined
+      ws.send(sendmsg)
+      keyholdtimer = setTimeout ->
+        sendfn = ->
+          ws.send(sendmsg)
+        sendfn()
+        keyholdtimer = setTimeout sendfn, config.keyhold_interval
+      , config.keyhold_delay
+
+  el.on 'keyup', (event)->
+    clearTimeout keyholdtimer
+    keyholdtimer = -1
   
   handleMessage = (data) ->
     if data.slice(0, wscmd_prefix.length) == wscmd_prefix
@@ -529,15 +485,13 @@ ConsoleBox = (selector, config) ->
     else if initialized
       text = ""
       data = ControlSignal.parseSentence(data)
-      # console.log((item.toString() for item in data).join(""))
-      console.log("[data]", data)
+      console.log((item.toString() for item in data).join(""))
       cpos = currcpos
       if cpos == undefined then cpos = currtext.length
       cprp = currcprp
       text0 = new StyledText()
       text1 = currtext.slice(0, cpos)
       text2 = currtext.slice(cpos)
-      # console.log("[cprp]", cprp)
       for item in data
         if typeof item == "string"
           text1 = text1.concat(new StyledText(item, cprp))
@@ -563,6 +517,7 @@ ConsoleBox = (selector, config) ->
           else if lead == '\n'
             # Next row
             text_tmp = text1.concat(text2)
+            cprp = new TextProp()
             text0 = text0.concat(text_tmp, new StyledText('\n', cprp))
             text1 = new StyledText((" " for c in text1).join(""), cprp)
             text2 = new StyledText()
@@ -691,6 +646,7 @@ ConsoleBox = (selector, config) ->
       lastline = lines[lines.length-1]
       updateText(lastline, lastline.length - cpos, cprp)
 
+  # prevent some events
   el.on 'keydown', (event)->
     keycode = event.keyCode
     # prevent arrow scroll
@@ -699,12 +655,6 @@ ConsoleBox = (selector, config) ->
     # prevent tab switch
     if keycode == 0x09
       event.preventDefault()
-
-
-  # fakeinput.on 'keypress', ->
-  #   val = fakeinput.val()
-  #   currrow.text(val)
-  #   currrow.append(makeCursor())
 
   # initilize the websocket
   ws = new WebSocket(config.wsurl)
