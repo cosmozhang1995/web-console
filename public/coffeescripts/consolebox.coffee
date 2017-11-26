@@ -78,6 +78,16 @@ TextProp = (ctrl, fgcolor, bgcolor) ->
   this.fgcolor = fgcolor || 0
   this.bgcolor = bgcolor || 0
   return this
+TextProp.prototype.equal = (other) ->
+  unless this.ctrl.clear == other.ctrl.clear then return false
+  unless this.ctrl.highlight == other.ctrl.highlight then return false
+  unless this.ctrl.underline == other.ctrl.underline then return false
+  unless this.ctrl.blink == other.ctrl.blink then return false
+  unless this.ctrl.inverse == other.ctrl.inverse then return false
+  unless this.ctrl.invisible == other.ctrl.invisible then return false
+  unless this.fgcolor == other.fgcolor then return false
+  unless this.bgcolor == other.bgcolor then return false
+  return true
 
 StyledChar = (char, prop) ->
   this.char = char || "\x00"
@@ -162,6 +172,19 @@ ConsoleBox = (selector, config) ->
   config.blink_interval = 500
   config.keyhold_delay = config.keyhold_delay || 1000
   config.keyhold_interval = config.keyhold_interval || 250
+  config.menu = config.menu || {}
+  config.menu.fontsize = config.menu.fontsize || "inherit"
+  config.menu.fontfamily = config.menu.fontfamily || "initial"
+  config.menu.minwidth = config.menu.minwidth || "100px"
+  config.menu.fgcolor = config.menu.fgcolor || "#333"
+  config.menu.bgcolor = config.menu.bgcolor || "#fff"
+  config.menu.fgcolor_active = config.menu.fgcolor_active || "#fff"
+  config.menu.bgcolor_active = config.menu.bgcolor_active || "#007fff"
+  config.menu.padding = "1px 4px"
+  config.menu.translates = config.menu.translates || {
+    copy: "Copy"
+    paste: "Paste"
+  }
 
   el = $(selector) # the root element
   ws = undefined # the websocket
@@ -206,6 +229,7 @@ ConsoleBox = (selector, config) ->
 
   # main styles
   el.css
+    position: "relative"
     width: config.width
     height: config.height
     padding: config.padding
@@ -229,6 +253,8 @@ ConsoleBox = (selector, config) ->
     .attr('src', medias.beep_wav)
     .attr('autostart', "false")
   emptyBoxEl.append(beepAudio)
+  # fakeeditbox = $('<textarea></textarea>')
+  # emptyBoxEl.append(fakeeditbox)
   beepAudio = beepAudio[0]
   el.append(emptyBoxEl)
   fakeinput = $('<input class="fake-input"/>').css
@@ -246,11 +272,91 @@ ConsoleBox = (selector, config) ->
     height: "auto"
   contentEl.append(currrow)
   el.append(contentEl)
+  # fakeeditbox = $('<div></div>')
+  # fakeeditbox.attr
+  #   tabindex: "-1"
+  #   contenteditable: "true"
+  # fakeeditbox.css
+  #   width: "100%"
+  #   height: "100%"
+  #   opacity: "0"
+  #   position: "absolute"
+  #   left: "0"
+  #   top: "0"
+  # el.append(fakeeditbox)
+
+  # is focused ?
+  isfocus = -> el.is(":focus") # or fakeeditbox.is(":focus")
+
+  # # menu callbacks
+  # selection_to_copy = ""
+  # menuActionPreCopy = (event) ->
+  #   copycontent = undefined
+  #   if document.getSelection
+  #     copycontent = document.getSelection()
+  #   else if window.getSelection
+  #     copycontent = window.getSelection()
+  #   if copycontent
+  #     copycontent = copycontent.toString()
+  #     console.log("menucopy", copycontent)
+  #   selection_to_copy = selection_to_copy || ""
+  # menuActionCopy = (event) ->
+  #   console.log("copy")
+  # menuActionPaste = (event) ->
+  #   console.log("paste")
+
+  # # menu
+  # menubox = $('<div class="menu-box"></div>').css
+  #   display: "box"
+  #   position: "absolute"
+  #   minWidth: config.menu.minwidth
+  #   borderColor: config.menu.fgcolor
+  #   borderWidth: "1px"
+  #   borderStyle: "solid"
+  #   borderRadius: "2px"
+  #   cursor: "default"
+  # createMenuItem = (html, callback)->
+  #   item = $('<div class="menu-item"></div>').css
+  #     color: config.menu.fgcolor
+  #     backgroundColor: config.menu.bgcolor
+  #     padding: config.menu.padding
+  #     fontsize: config.menu.fontsize
+  #     fontfamily: config.menu.fontfamily
+  #     lineheight: 1
+  #   item.html html
+  #   item.on 'mouseover', ->
+  #     item.css
+  #       color: config.menu.fgcolor_active
+  #       backgroundColor: config.menu.bgcolor_active
+  #   item.on 'mouseout', ->
+  #     item.css
+  #       color: config.menu.fgcolor
+  #       backgroundColor: config.menu.bgcolor
+  #   item.on 'click', (event) ->
+  #     if callback then callback(event)
+  #     menubox.detach()
+  #   return item
+  # copyButton = createMenuItem(config.menu.translates.copy, menuActionCopy).appendTo(menubox)
+  # copyButton.on 'mousedown', menuActionPreCopy
+  # createMenuItem(config.menu.translates.paste, menuActionPaste).appendTo(menubox)
+  # el.on 'contextmenu', (event) ->
+  #   event.preventDefault()
+  #   eloffset = el.offset()
+  #   x = event.clientX + $(window).scrollLeft() - eloffset.left
+  #   y = event.clientY + $(window).scrollTop() - eloffset.top
+  #   menubox.detach().css
+  #     left: x + "px"
+  #     top: y + "px"
+  #   menubox.appendTo(el)
+  # closeMenuEventCallback = (event) ->
+  #   unless $(event.target).closest('.menu-box')[0] == menubox[0]
+  #     menubox.detach()
+  # $(document).on 'mousedown', closeMenuEventCallback
 
   # blinking
   blinkstate = false
   updateBlinkState = ->
-    if el.is(":focus")
+    if isfocus()
       if blinkstate
         cursorInnerEl.css
           backgroundColor: config.cursorcolor
@@ -319,7 +425,7 @@ ConsoleBox = (selector, config) ->
     proparr = [{index: 0, prop: cp}]
     for i in [0...prop.length]
       p = prop[i]
-      unless p.code == cp.code and p.fgcolor == cp.fgcolor and p.bgcolor == cp.bgcolor
+      unless p.equal(cp)
         proparr.push
           index: i
           prop: p
